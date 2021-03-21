@@ -181,6 +181,29 @@
     </div>
   </div>
 
+  <!-- The core Firebase JS SDK is always required and must be listed first -->
+  <script src="https://www.gstatic.com/firebasejs/8.3.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.3.1/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.3.1/firebase-database.js"></script>
+
+  <!-- TODO: Add SDKs for Firebase products that you want to use
+      https://firebase.google.com/docs/web/setup#available-libraries -->
+
+  <script>
+    // Your web app's Firebase configuration
+    var firebaseConfig = {
+      apiKey: "AIzaSyDueI3EOUaWwT26Tfm8FaanY3alfknEMe0",
+      authDomain: "motor-task.firebaseapp.com",
+      projectId: "motor-task",
+      storageBucket: "motor-task.appspot.com",
+      messagingSenderId: "1027563112072",
+      appId: "1:1027563112072:web:26f3c22f873a19b5f3013d",
+      databaseURL: "https://motor-task-default-rtdb.firebaseio.com/",
+    };
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+  </script>
+
   <script src="deps/pixi.js"></script>
   <script src="deps/q.js"></script>
   <script src="deps/q-xhr.js"></script>

@@ -7769,7 +7769,20 @@ var createClass = function () {
 
 
 
+var defineProperty = function (obj, key, value) {
+  if (key in obj) {
+    Object.defineProperty(obj, key, {
+      value: value,
+      enumerable: true,
+      configurable: true,
+      writable: true
+    });
+  } else {
+    obj[key] = value;
+  }
 
+  return obj;
+};
 
 
 
@@ -8381,7 +8394,7 @@ var TARGET_COLOR = 0xFDAE61;
 
 var HIGHLIGHTED_BLOCK_COLOR = 0x724519;
 var DRAG_HIGHLIGHT_PERIOD = 500;
-var letsPlayScene = false;
+var DB = firebase.database();
 
 var TRIGGERS = {
   "loadGame": 100, // When loads starts
@@ -8436,18 +8449,6 @@ function makeTargetShape(gridPos) {
   // console.log("Grid position is " + String(gridPosToPixelPos(gridPos).x) + " " + String(gridPosToPixelPos(gridPosToPixelPos).y));
   rect.position = gridPosToPixelPos(gridPos);
   return rect;
-}
-
-function convertShapeToArray(shape) {
-  return shape.map(function (_ref) {
-    var x = _ref.x,
-        y = _ref.y;
-    return [x, y];
-  });
-}
-
-function calculateSearchScore(shapeCount, timePlayed) {
-  return Math.min(2 * (1 / 88 * shapeCount * (720000 / timePlayed) - 0.5), 1);
 }
 
 function shuffle(array) {
@@ -8534,6 +8535,20 @@ function update(timeScale) {
   app$1.renderer.render(app$1.stage);
 }
 
+function updateEventDatabase(event) {
+  var timeSinceStart = Date.now() - startAt;
+  DB.ref(dbRef + '/events').update(defineProperty({}, timeSinceStart, event));
+}
+
+function updateNewTrialInfo(trialNumber, sourcePos, targets) {
+  console.log(targets);
+  DB.ref(dbRef + '/trialsInfo').update(defineProperty({}, trialNumber, {
+    "source": "x: " + sourcePos.x + " y: " + sourcePos.y,
+    "target_1": "x: " + targets[0].x + " y: " + targets[0].y,
+    "target_2": "x: " + targets[1].x + " y: " + targets[1].y
+  }));
+}
+
 var IntroScene = function (_util$Entity) {
   inherits(IntroScene, _util$Entity);
 
@@ -8578,6 +8593,17 @@ var IntroScene = function (_util$Entity) {
     value: function onDone() {
       playerData.customData.userProvidedId = document.getElementById("user-provided-id").value;
       // redmetricsConnection.updatePlayer(playerData);
+      var currentTime = Date.now();
+      var today = new Date(currentTime);
+
+      startAt = currentTime;
+
+      DB.ref('users/' + playerData.customData.userProvidedId).set({
+        // profile_picture : imageUrl
+        start_time: today.toUTCString()
+      });
+
+      dbRef = 'users/' + playerData.customData.userProvidedId;
 
       this.done = true;
     }
@@ -8585,132 +8611,8 @@ var IntroScene = function (_util$Entity) {
   return IntroScene;
 }(Entity);
 
-var TrainingScene = function (_util$Entity2) {
-  inherits(TrainingScene, _util$Entity2);
-
-  function TrainingScene() {
-    classCallCheck(this, TrainingScene);
-    return possibleConstructorReturn(this, (TrainingScene.__proto__ || Object.getPrototypeOf(TrainingScene)).apply(this, arguments));
-  }
-
-  createClass(TrainingScene, [{
-    key: "setup",
-    value: function setup() {
-      this.done = false;
-      this.didDropBlock = false;
-
-      this.blockScene = new BlockScene(true);
-      this.blockScene.setup();
-
-      this.blockScene.preventAddingShape = true;
-      document.getElementById("add-shape").style.display = "none";
-      document.getElementById("done-adding").style.display = "none";
-
-      this.blockScene.on("droppedBlock", this.onDroppedBlock, this);
-      this.blockScene.on("addedShape", this.onAddedShape, this);
-
-      document.getElementById("training-gui").style.display = "block";
-      document.getElementById("pixi-canvas").addEventListener("keyup", this.onKeyUp.bind(this));
-      document.getElementById("done-training-1").addEventListener("click", this.onDonePart1.bind(this));
-      document.getElementById("done-training-2").addEventListener("click", this.onDonePart2.bind(this));
-      document.getElementById("done-training-4").addEventListener("click", this.onDonePart4.bind(this));
-      document.getElementById("done-training-5").addEventListener("click", this.finishTraining.bind(this));
-    }
-  }, {
-    key: "finishTraining",
-    value: function finishTraining() {
-      this.done = true;
-      letsPlayScene = false;
-      galleryShapes = [];
-      sendTrigger("startGame");
-    }
-  }, {
-    key: "update",
-    value: function update(timeSinceStart) {
-      this.blockScene.update(timeSinceStart);
-    }
-  }, {
-    key: "teardown",
-    value: function teardown() {
-      this.blockScene.off("droppedBlock", this.onDroppedBlock, this);
-      this.blockScene.off("addedShape", this.onAddedShape, this);
-      this.blockScene.teardown();
-
-      document.getElementById("done-adding").style.display = "block";
-      document.getElementById("training-gui").style.display = "none";
-    }
-  }, {
-    key: "requestedTransition",
-    value: function requestedTransition(timeSinceStart) {
-      return this.done ? "next" : null;
-    }
-  }, {
-    key: "onDroppedBlock",
-    value: function onDroppedBlock() {
-      if (this.didDropBlock) return;
-
-      this.didDropBlock = true;
-      this.blockScene.highlightMovableBlocks();
-
-      document.getElementById("done-training-1").style.display = "block";
-    }
-  }, {
-    key: "onDonePart1",
-    value: function onDonePart1() {
-      document.getElementById("training-1").style.display = "none";
-      document.getElementById("training-2").style.display = "block";
-
-      // hide title
-      document.getElementById("training-title").style.visibility = "hidden";
-    }
-  }, {
-    key: "onDonePart2",
-    value: function onDonePart2() {
-      this.blockScene.unhighlightMovableBlocks();
-
-      document.getElementById("training-2").style.display = "none";
-      document.getElementById("training-3").style.display = "block";
-
-      document.getElementById("add-shape").style.display = "block";
-      document.getElementById("pixi-canvas").focus();
-      this.blockScene.preventAddingShape = false;
-    }
-  }, {
-    key: "onAddedShape",
-    value: function onAddedShape() {
-      document.getElementById("training-3").style.display = "none";
-      // document.getElementById("training-5").style.display = "block";
-      document.getElementById('training-4').style.display = "block";
-      // this.blockScene.teardown()
-      this.blockScene.resetBlocks();
-      this.blockScene.off("addedShape", this.onAddedShape, this);
-    }
-  }, {
-    key: "onDonePart4",
-    value: function onDonePart4() {
-      document.getElementById('training-4').style.display = "none";
-      document.getElementById('training-5').style.display = "block";
-      document.getElementById("pixi-canvas").focus();
-      letsPlayScene = true;
-      this.blockScene.removeBlocks();
-    }
-  }, {
-    key: "onKeyUp",
-    value: function onKeyUp(e) {
-      // If they pressed a number key, add the shape
-      if (!isNaN(parseInt(e.key))) {
-        var keyValue = parseInt(e.key);
-        if (keyValue == 5 && letsPlayScene) {
-          this.finishTraining();
-        }
-      }
-    }
-  }]);
-  return TrainingScene;
-}(Entity);
-
-var BlockScene = function (_util$Entity3) {
-  inherits(BlockScene, _util$Entity3);
+var BlockScene = function (_util$Entity2) {
+  inherits(BlockScene, _util$Entity2);
 
   function BlockScene() {
     classCallCheck(this, BlockScene);
@@ -8742,7 +8644,7 @@ var BlockScene = function (_util$Entity3) {
       sceneLayer.addChild(this.container);
 
       this.generateRandomVariables();
-      this.resetTrial();
+      this.startTrial();
       // HTML
       document.getElementById("blocks-gui").style.display = "block";
 
@@ -8788,7 +8690,13 @@ var BlockScene = function (_util$Entity3) {
   }, {
     key: "resetTrial",
     value: function resetTrial() {
-      var _this4 = this;
+      updateEventDatabase(sceneEvents["resetTrial"]);
+      this.startTrial();
+    }
+  }, {
+    key: "startTrial",
+    value: function startTrial() {
+      var _this3 = this;
 
       this.container.removeChild(this.blocksContainer);
       this.canChangeTrial = false;
@@ -8810,22 +8718,26 @@ var BlockScene = function (_util$Entity3) {
       var _loop = function _loop(i) {
         randomPoint = [];
 
-        if (_this4.isRow) {
-          randomPoint = _this4.sourceFirst ? [i, 0] : [i + _this4.p[0], _this4.p[1]];
+        if (_this3.isRow) {
+          randomPoint = _this3.sourceFirst ? [i, 0] : [i + _this3.p[0], _this3.p[1]];
         } else {
-          randomPoint = _this4.sourceFirst ? [0, i] : [_this4.p[0], i + _this4.p[1]];
+          randomPoint = _this3.sourceFirst ? [0, i] : [_this3.p[0], i + _this3.p[1]];
         }
         var pos = new PIXI.Point(randomPoint[0], randomPoint[1]);
-        var rect = makeSourceShape(pos, _this4.sourceColors[i]);
+        var rect = makeSourceShape(pos, _this3.sourceColors[i]);
+
+        if (_this3.sourceColors[i] == 0xFDAE61) {
+          _this3.sourcePos = pos;
+        }
 
         rect.buttonMode = true;
         if (!buttonControls) {
-          rect.on("pointerdown", _this4.onPointerDown.bind(_this4));
-          rect.on("pointerup", _this4.onPointerUp.bind(_this4));
+          rect.on("pointerdown", _this3.onPointerDown.bind(_this3));
+          rect.on("pointerup", _this3.onPointerUp.bind(_this3));
         }
-        rect.on("pointermove", _this4.onPointerMove.bind(_this4));
+        rect.on("pointermove", _this3.onPointerMove.bind(_this3));
         rect.interactive = true;
-        _self = _this4;
+        _self = _this3;
 
         // This is useful for when button controls are enabled.
         // Button controls are when the player can choose the block by pressing a button on the keyboard.
@@ -8838,8 +8750,8 @@ var BlockScene = function (_util$Entity3) {
           _self.mouseOverBlock = null;
         };
 
-        _this4.sourceBlocks.push(pos);
-        _this4.blocksContainer.addChild(rect);
+        _this3.sourceBlocks.push(pos);
+        _this3.blocksContainer.addChild(rect);
       };
 
       for (var i = 0; i < 3; i++) {
@@ -8860,16 +8772,18 @@ var BlockScene = function (_util$Entity3) {
         }
 
         // const p = [11, i - 4];
-        var pos = new PIXI.Point(randomPoint[0], randomPoint[1]);
-        var _rect = makeTargetShape(pos);
+        var _pos = new PIXI.Point(randomPoint[0], randomPoint[1]);
+        var _rect = makeTargetShape(_pos);
 
         _rect.interactive = false;
 
-        this.targetBlocks.push(pos);
+        this.targetBlocks.push(_pos);
         this.blocksContainer.addChild(_rect);
       }
 
       this.updateBlocks();
+      this.findFreeGridPositionsTarget();
+      updateNewTrialInfo(this.currentTrial, this.sourcePos, this.targetPositions);
     }
   }, {
     key: "nextTrial",
@@ -8877,9 +8791,10 @@ var BlockScene = function (_util$Entity3) {
       if (this.currentTrial < this.numberTrials && this.canChangeTrial) {
         this.currentTrial += 1;
         this.generateRandomVariables();
-        this.resetTrial();
+        this.startTrial();
         this.canChangeTrial = false;
       }
+      updateEventDatabase(sceneEvents["nextTrial"]);
     }
   }, {
     key: "disableBlocksInteractivity",
@@ -8908,30 +8823,6 @@ var BlockScene = function (_util$Entity3) {
           }
         }
       }
-    }
-  }, {
-    key: "resetBlocks",
-    value: function resetBlocks() {
-      this.container.removeChild(this.blocksContainer);
-
-      this.blocksContainer = new PIXI.Container();
-      this.container.addChild(this.blocksContainer);
-      this.blockGrid = [];
-      for (var i = 0; i < 10; i++) {
-        var gridPos = new PIXI.Point(i, 0);
-        this.blockGrid.push(gridPos);
-
-        var _rect2 = makeSourceShape(gridPos);
-
-        _rect2.buttonMode = true;
-        _rect2.on("pointerdown", this.onPointerDown.bind(this));
-        _rect2.on("pointerup", this.onPointerUp.bind(this));
-        _rect2.on("pointermove", this.onPointerMove.bind(this));
-
-        this.blocksContainer.addChild(_rect2);
-      }
-
-      this.updateBlocks();
     }
   }, {
     key: "removeBlocks",
@@ -9092,6 +8983,7 @@ var BlockScene = function (_util$Entity3) {
         document.getElementById("wrong-color-message").style.display = "block";
         this.draggingBlock = null;
         this.disableBlocksInteractivity();
+        updateEventDatabase(sceneEvents["pickupWrongColor"]);
         return;
       }
 
@@ -9107,6 +8999,8 @@ var BlockScene = function (_util$Entity3) {
       // Disable html buttons
       document.getElementById("html-layer").className = "no-pointer-events";
       this.highlightedBlocks.add(this.draggingBlock);
+
+      updateEventDatabase(sceneEvents["pickupCorrectColor"]);
     }
   }, {
     key: "onPointerUp",
@@ -9160,6 +9054,7 @@ var BlockScene = function (_util$Entity3) {
         document.getElementById("wrong-color-message").style.display = "block";
         this.draggingBlock = null;
         this.disableBlocksInteractivity();
+        updateEventDatabase(sceneEvents["pickupWrongColor"]);
         return;
       }
 
@@ -9172,6 +9067,7 @@ var BlockScene = function (_util$Entity3) {
       document.getElementById("html-layer").className = "no-pointer-events";
 
       this.highlightedBlocks.add(this.draggingBlock);
+      updateEventDatabase(sceneEvents["pickupCorrectColor"]);
     }
   }, {
     key: "dropBlockUsingButtons",
@@ -9205,7 +9101,7 @@ var BlockScene = function (_util$Entity3) {
         if (keyValue == 1) {
           this.nextTrial();
         } else if (keyValue == 2) {
-          this.resetTrial();
+          this.startTrial();
         } else if (keyValue == 3 || keyValue == 4) {
           if (buttonControls) {
             if (this.draggingBlock) {
@@ -9307,16 +9203,17 @@ var BlockScene = function (_util$Entity3) {
         if (!contains(this.targetPositions, closestTargetPos)) {
           // alert("wrong position");
           document.getElementById("wrong-position-message").style.display = "block";
+          updateEventDatabase(sceneEvents["droppedWrongPosition"]);
         } else {
           document.getElementById("correct-message").style.display = "block";
+          updateEventDatabase(sceneEvents["success"]);
         }
         // this.targetBlocks.push(closestTargetPos);
       } else {
         // If closer to the source, attach it to the source. 
         block.position = gridPosToPixelPos(closestSourcePos);
         document.getElementById("early-release-message").style.display = "block";
-        // this.sourceBlocks.push(closestSourcePos);
-        // this.targetBlocks.push(closestTargetPos);
+        updateEventDatabase(sceneEvents["droppedEarly"]);
       }
       this.disableBlocksInteractivity();
 
@@ -9522,7 +9419,7 @@ var BlockScene = function (_util$Entity3) {
 
       this.done = true;
 
-      searchScore = calculateSearchScore();
+      
     }
   }, {
     key: "updateGalleryShape",
@@ -9559,297 +9456,30 @@ var BlockScene = function (_util$Entity3) {
   return BlockScene;
 }(Entity);
 
-var GalleryScene = function (_util$Entity4) {
-  inherits(GalleryScene, _util$Entity4);
-
-  function GalleryScene() {
-    classCallCheck(this, GalleryScene);
-    return possibleConstructorReturn(this, (GalleryScene.__proto__ || Object.getPrototypeOf(GalleryScene)).apply(this, arguments));
-  }
-
-  createClass(GalleryScene, [{
-    key: "setup",
-    value: function setup() {
-      var _this6 = this;
-
-      var ROWS = 5;
-      var COLS = 10;
-      var ITEMS_PER_PAGE = ROWS * COLS;
-
-      this.done = false;
-      this.selectedIndexes = [];
-      this.pageNumber = 0;
-
-      this.container = new PIXI.Container();
-      sceneLayer.addChild(this.container);
-
-      this.pages = new PIXI.Container();
-      this.container.addChild(this.pages);
-
-      var pageContainer = void 0;
-
-      var _loop2 = function _loop2(i) {
-        var row = Math.floor(i % ITEMS_PER_PAGE / COLS);
-        var col = Math.floor(i % ITEMS_PER_PAGE % COLS);
-
-        // Make new page if necessary
-        if (i % (ROWS * COLS) == 0) {
-          pageContainer = new PIXI.Container();
-          pageContainer.visible = false;
-          _this6.pages.addChild(pageContainer);
-        }
-        var galleryShapeCenter = new PIXI.Point(70 + col * 90, 95 + row * 85);
-
-        var galleryBg = new PIXI.Graphics();
-        galleryBg.beginFill(0x333333);
-        galleryBg.drawRect(-40, -40, 80, 80);
-        galleryBg.endFill();
-        galleryBg.position = galleryShapeCenter;
-        pageContainer.addChild(galleryBg);
-
-        galleryBg.on("pointerdown", function (e) {
-          return _this6.onToggleShape(galleryBg, i);
-        });
-        galleryBg.buttonMode = true;
-        galleryBg.interactive = true;
-
-        var galleryParent = new PIXI.Container();
-        galleryParent.position = galleryShapeCenter;
-        galleryParent.scale.set(0.1);
-        pageContainer.addChild(galleryParent);
-
-        var galleryLayer = new PIXI.Container();
-        var _iteratorNormalCompletion9 = true;
-        var _didIteratorError9 = false;
-        var _iteratorError9 = undefined;
-
-        try {
-          for (var _iterator9 = galleryShapes[i][Symbol.iterator](), _step9; !(_iteratorNormalCompletion9 = (_step9 = _iterator9.next()).done); _iteratorNormalCompletion9 = true) {
-            var block = _step9.value;
-
-            galleryLayer.addChild(makeSourceShape(block));
-          }
-        } catch (err) {
-          _didIteratorError9 = true;
-          _iteratorError9 = err;
-        } finally {
-          try {
-            if (!_iteratorNormalCompletion9 && _iterator9.return) {
-              _iterator9.return();
-            }
-          } finally {
-            if (_didIteratorError9) {
-              throw _iteratorError9;
-            }
-          }
-        }
-
-        centerContainer(galleryLayer, new PIXI.Point());
-        galleryParent.addChild(galleryLayer);
-      };
-
-      for (var i = 0; i < galleryShapes.length; i++) {
-        _loop2(i);
-      }
-
-      // HTML
-      document.getElementById("selection-gui").style.display = "block";
-      document.getElementById("done-selection").addEventListener("click", this.onDoneSelection.bind(this));
-      document.getElementById("previous-page-button").addEventListener("click", function (e) {
-        return _this6.changePage(_this6.pageNumber - 1);
-      });
-      document.getElementById("next-page-button").addEventListener("click", function (e) {
-        return _this6.changePage(_this6.pageNumber + 1);
-      });
-
-      this.updateDoneButton();
-
-      this.changePage(0);
-    }
-  }, {
-    key: "update",
-    value: function update(timeSinceStart) {
-      if (this.done) searchScore = calculateSearchScore(galleryShapes.length, timeSinceStart);
-    }
-  }, {
-    key: "teardown",
-    value: function teardown() {
-      sceneLayer.removeChild(this.container);
-      document.getElementById("selection-gui").style.display = "none";
-    }
-  }, {
-    key: "requestedTransition",
-    value: function requestedTransition(timeSinceStart) {
-      return this.done ? "next" : null;
-    }
-  }, {
-    key: "onToggleShape",
-    value: function onToggleShape(shape, shapeIndex) {
-      var isSelected = !_.contains(this.selectedIndexes, shapeIndex);
-
-      if (isSelected) this.selectedIndexes.push(shapeIndex);else this.selectedIndexes = removeFromArray(this.selectedIndexes, shapeIndex);
-
-      shape.beginFill(isSelected ? 0x9B2526 : 0x333333);
-      shape.drawRect(-40, -40, 80, 80);
-      shape.endFill();
-
-      this.updateDoneButton();
-
-      sendTrigger("chooseGalleryShape");
-
-      // redmetricsConnection.postEvent({
-      //   type: "selected shape",
-      //   customData: {
-      //     shapeIndex: shapeIndex,
-      //     shape: convertShapeToArray(galleryShapes[shapeIndex]),
-      //     isSelected: isSelected,
-      //   }
-      // });
-    }
-  }, {
-    key: "updateDoneButton",
-    value: function updateDoneButton() {
-      document.getElementById("done-selection").disabled = this.selectedIndexes.length != 5;
-    }
-  }, {
-    key: "changePage",
-    value: function changePage(newPageNumber) {
-      this.pages.children[this.pageNumber].visible = false;
-
-      this.pageNumber = newPageNumber;
-      this.pages.children[this.pageNumber].visible = true;
-      document.getElementById("previous-page-button").disabled = this.pageNumber == 0;
-      document.getElementById("next-page-button").disabled = this.pageNumber == this.pages.children.length - 1;
-    }
-  }, {
-    key: "onDoneSelection",
-    value: function onDoneSelection() {
-      var selectedShapes = _.map(this.selectedIndexes, function (index) {
-        return convertShapeToArray(galleryShapes[index]);
-      });
-
-      sendTrigger("galleryDone");
-
-      // redmetricsConnection.postEvent({
-      //   type: "done selection",
-      //   customData: {
-      //     shapeIndices: this.selectedIndexes,
-      //     shapes: selectedShapes
-      //   }
-      // });
-
-      this.done = true;
-    }
-  }]);
-  return GalleryScene;
-}(Entity);
-
-var ResultsScene = function (_util$Entity5) {
-  inherits(ResultsScene, _util$Entity5);
-
-  function ResultsScene() {
-    classCallCheck(this, ResultsScene);
-    return possibleConstructorReturn(this, (ResultsScene.__proto__ || Object.getPrototypeOf(ResultsScene)).apply(this, arguments));
-  }
-
-  createClass(ResultsScene, [{
-    key: "setup",
-    value: function setup() {
-      this.container = new PIXI.Container();
-      sceneLayer.addChild(this.container);
-
-      document.getElementById("results-gui").style.display = "block";
-
-      if (!showResults) {
-        document.getElementById("results-block").style.display = "none";
-      } else {
-        document.getElementById("thanks-block").style.display = "none";
-
-        var slider = new PIXI.Sprite(app$1.loader.resources["images/slider.png"].texture);
-        slider.anchor.set(0.5);
-        slider.position.set(app$1.renderer.width / 2, 145);
-        this.container.addChild(slider);
-
-        var ball = new PIXI.Graphics();
-        ball.beginFill(0x2CC62C);
-        ball.drawCircle(app$1.renderer.width / 2 + searchScore * 255, 120, 10);
-        this.container.addChild(ball);
-
-        if (searchScore > 0) {
-          document.getElementById("rapid-search-text").style.display = "block";
-        } else {
-          document.getElementById("focused-search-text").style.display = "block";
-        }
-
-        var searchScorePercent = Math.round(Math.abs(searchScore) * 100);
-        var _iteratorNormalCompletion10 = true;
-        var _didIteratorError10 = false;
-        var _iteratorError10 = undefined;
-
-        try {
-          for (var _iterator10 = document.getElementsByClassName("searchScorePercent")[Symbol.iterator](), _step10; !(_iteratorNormalCompletion10 = (_step10 = _iterator10.next()).done); _iteratorNormalCompletion10 = true) {
-            var el = _step10.value;
-
-            el.innerText = searchScorePercent;
-          }
-
-          // document.getElementById("code").innerText = redmetricsConnection.playerId ? 
-          // redmetricsConnection.playerId.substr(-8) : "Unknown";
-
-          // Setup followup link
-        } catch (err) {
-          _didIteratorError10 = true;
-          _iteratorError10 = err;
-        } finally {
-          try {
-            if (!_iteratorNormalCompletion10 && _iterator10.return) {
-              _iterator10.return();
-            }
-          } finally {
-            if (_didIteratorError10) {
-              throw _iteratorError10;
-            }
-          }
-        }
-
-        if (searchParams.has("followupLink")) {
-          var expId = searchParams.get("expId") || searchParams.get("expID") || "";
-          var userId = searchParams.get("userId") || searchParams.get("userID") || "";
-          var metricsId = redmetricsConnection.playerId || "";
-          var userProvidedId = playerData.customData.userProvidedId || "";
-
-          var link = searchParams.get("followupLink");
-          if (!_.contains(link, "?")) link += "?";
-          link += "&IDExp=" + expId + "&IDUser=" + userId + "&IDMetrics=" + metricsId + "&IDUserProvided=" + userProvidedId;
-          document.getElementById("followup-link").href = link;
-        } else {
-          document.getElementById("followup-link-container").style.display = "none";
-        }
-      }
-    }
-  }, {
-    key: "teardown",
-    value: function teardown() {
-      document.getElementById("results-gui").style.display = "none";
-      sceneLayer.removeChild(this.container);
-    }
-  }]);
-  return ResultsScene;
-}(Entity);
-
 var scenes = {
   intro: IntroScene,
-  training: TrainingScene,
-  block: BlockScene,
-  gallery: GalleryScene,
-  results: ResultsScene
+  block: BlockScene
 };
 
 var sceneTransitions = {
-  intro: "training",
-  training: "block",
-  block: "gallery",
-  gallery: "results"
+  intro: "block"
+  // training: "block",
+  // block: "gallery",
+  // gallery: "results",
+};
+
+// 1 - success
+// 2 - dropped too early
+// 3 - dropped in wrong location
+
+var sceneEvents = {
+  success: 1,
+  droppedEarly: 2,
+  droppedWrongPosition: 3,
+  pickupCorrectColor: 4, //v
+  pickupWrongColor: 5, //v 
+  resetTrial: 6, //v
+  nextTrial: 7 //v
 };
 
 var searchParams = new URLSearchParams(window.location.search);
@@ -9861,13 +9491,13 @@ var buttonControls = searchParams.get("buttonControls") === "true";
 console.log(buttonControls);
 
 var galleryShapes = [];
-var searchScore = 0.33;
-var redmetricsConnection = void 0;
-var defaultStartingScene = "block";
+var defaultStartingScene = "intro";
 var sceneLayer = void 0;
 var currentScene = void 0;
 var currentSceneName = void 0;
 var sceneStartedAt = 0;
+var startAt = 0;
+var dbRef = "";
 
 var app$1 = new PIXI.Application({
   width: 960,
